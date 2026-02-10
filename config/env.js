@@ -18,7 +18,7 @@ const envConfig = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1d',
   refreshSecret: process.env.REFRESH_SECRET,
   refreshExpiresIn: process.env.REFRESH_EXPIRES_IN || '14d',
-  mongoURL: process.env.MONGO_URL,
+  mongoURL: process.env.MONGO_URI,
   cohereApiKey: process.env.COHEREAI_API_KEY,
   revenueSecretApiKey: process.env.REVENUECAT_SECRET_API_KEY,
   geminiApiKey: process.env.GEMINI_API_KEY
