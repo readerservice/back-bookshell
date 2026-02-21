@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema({
     refreshToken: {
         type: String,
         default: null
-    }
+    },
+    aiDailyCount: { 
+        type: Number, 
+        default: 0 
+    },
+    aiDailyDate: { type: Date }
 }, { timestamps: true });
 module.exports = mongoose.model('users', userSchema);
