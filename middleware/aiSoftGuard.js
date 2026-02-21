@@ -1,5 +1,7 @@
 const SOFT_DAILY_LIMIT = 300;
 
+const users = require('../models/usersModel')
+
 module.exports = async (req, res, next) => {
   const user = await users.findById(req.user.id);
 
