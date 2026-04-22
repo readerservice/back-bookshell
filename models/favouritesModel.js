@@ -26,6 +26,7 @@ const BookInfoSchema = new mongoose.Schema(
         categories: { type: [String], default: [] },
         imageLinks: { type: ImageSchema, default: null },
         description: { type: String, default: null },
+        workKey: { type: String, default: null },
     },
     { _id: false }
 )
