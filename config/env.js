@@ -20,6 +20,7 @@ const envConfig = {
   refreshExpiresIn: process.env.REFRESH_EXPIRES_IN || '14d',
   mongoURL: process.env.MONGO_URI,
   cohereApiKey: process.env.COHEREAI_API_KEY,
+  openaiApiKey: process.env.OPENAI_API_KEY,
   revenueSecretApiKey: process.env.REVENUECAT_SECRET_API_KEY,
   geminiApiKey: process.env.GEMINI_API_KEY
 };

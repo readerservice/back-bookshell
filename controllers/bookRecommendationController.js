@@ -1,10 +1,11 @@
-const { CohereClientV2 } = require("cohere-ai");
+const { Configuration, OpenAIApi } = require("openai");
 const env = require("../config/env");
 
-const cohere = new CohereClientV2({ token: env.cohereApiKey })
+const openai = new OpenAIApi(new Configuration({
+    apiKey: env.openaiApiKey
+}));
 
-const recommendationModelName = "command-a-03-2025";
-const descriptionModelName = "command-r7b-12-2024";
+const modelName = "gpt-4o-mini";
 
 const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
@@ -24,74 +25,6 @@ const getBookLabel = (book) => {
     if (!book?.title) return "";
 
     return book.author ? `${book.title} by ${book.author}` : book.title;
-};
-
-const normalizeForMatch = (value) => {
-    return String(value || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9а-яё]/gi, "")
-        .trim();
-};
-
-const isLikelyTitleMatch = (bookTitle, docTitle) => {
-    if (!bookTitle || !docTitle) return false;
-    if (bookTitle === docTitle) return true;
-    if (docTitle.includes(bookTitle) || bookTitle.includes(docTitle)) return true;
-
-    const shorterLength = Math.min(bookTitle.length, docTitle.length);
-    const longerLength = Math.max(bookTitle.length, docTitle.length);
-
-    return shorterLength >= 8 && shorterLength / longerLength >= 0.75;
-};
-
-const getAuthorLastName = (author) => {
-    return normalizeForMatch(String(author || "").split(/\s+/).filter(Boolean).pop());
-};
-
-const isOpenLibraryMatch = (book, doc) => {
-    const bookTitle = normalizeForMatch(book.title);
-    const docTitle = normalizeForMatch(doc.title);
-    const bookAuthorLastName = getAuthorLastName(book.author);
-    const docAuthors = Array.isArray(doc.author_name) ? doc.author_name : [];
-
-    const titleMatches = isLikelyTitleMatch(bookTitle, docTitle);
-
-    const authorMatches =
-        bookAuthorLastName &&
-        docAuthors.some(author => normalizeForMatch(author).includes(bookAuthorLastName));
-
-    return titleMatches && (authorMatches || docAuthors.length === 0);
-};
-
-const verifyBookInOpenLibrary = async (book) => {
-    const query = `${book.title} ${book.author}`;
-    const params = new URLSearchParams({
-        q: query,
-        limit: "5",
-        fields: "title,author_name,key,first_publish_year"
-    });
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
-
-    try {
-        const response = await fetch(`https://openlibrary.org/search.json?${params}`, {
-            signal: controller.signal,
-            headers: {
-                "User-Agent": "bookshell-app/1.0"
-            }
-        });
-
-        if (!response.ok) return false;
-
-        const data = await response.json();
-        return Array.isArray(data.docs) && data.docs.some(doc => isOpenLibraryMatch(book, doc));
-    } catch (error) {
-        console.error("Open Library verification failed:", error.message || error);
-        return false;
-    } finally {
-        clearTimeout(timeout);
-    }
 };
 
 const generateSingleBook = async (req, res) => {
@@ -141,9 +74,9 @@ const generateSingleBook = async (req, res) => {
             ${excludedList || "None"}
             `;
 
-        const cohereStartedAt = Date.now();
-        const response = await cohere.chat({
-            model: recommendationModelName,
+        const openaiStartedAt = Date.now();
+        const response = await openai.createChatCompletion({
+            model: modelName,
             messages: [
                 {
                     role: "user",
@@ -151,11 +84,12 @@ const generateSingleBook = async (req, res) => {
                 }
             ],
             temperature: 0.2,
-            max_tokens: 350
+            max_tokens: 350,
+            response_format: { type: "json_object" }
         });
-        console.log(`Cohere book generation took ${Date.now() - cohereStartedAt}ms`);
+        console.log(`OpenAI book generation took ${Date.now() - openaiStartedAt}ms`);
 
-        const text = response.message.content[0].text.trim();
+        const text = response.data.choices[0].message.content.trim();
 
         let data;
         try {
@@ -171,7 +105,7 @@ const generateSingleBook = async (req, res) => {
 
             data = JSON.parse(match[0])
         } catch (err) {
-            console.error("Failed to parse Cohere JSON:", text);
+            console.error("Failed to parse OpenAI JSON:", text);
             return res.status(422).json({ error: "Invalid JSON format from AI" });
         }
 
@@ -208,31 +142,14 @@ const generateSingleBook = async (req, res) => {
             return res.status(422).json({ error: "No unique books generated" });
         }
 
-        const openLibraryStartedAt = Date.now();
-        const verificationResults = await Promise.all(
-            unique.map(async (book) => ({
-                book,
-                exists: await verifyBookInOpenLibrary(book)
-            }))
-        );
-        console.log(`Open Library verification took ${Date.now() - openLibraryStartedAt}ms`);
-
-        const verifiedBooks = verificationResults
-            .filter(result => result.exists)
-            .map(result => result.book);
-
-        if (!verifiedBooks.length) {
-            return res.status(422).json({ error: "No verified books found" });
-        }
-
-        const book = verifiedBooks[Math.floor(Math.random() * verifiedBooks.length)];
+        const book = unique[Math.floor(Math.random() * unique.length)];
 
         res.json({
             book
         });
 
     } catch (error) {
-        console.error("Cohere Error:", error);
+        console.error("OpenAI Error:", error.response?.data || error);
         res.status(500).json({ error: "Failed to generate book" });
     }
 };
@@ -244,22 +161,22 @@ const getBookDescription = async (req, res) => {
 
         const prompt = `Write a short 2–3 sentence description in ${responseLanguage} of the book "${title}" by ${author || "unknown author"}. Return only the plain text description, no JSON or explanations.`;
 
-        const cohereStartedAt = Date.now();
-        const response = await cohere.chat({
-            model: descriptionModelName,
+        const openaiStartedAt = Date.now();
+        const response = await openai.createChatCompletion({
+            model: modelName,
             messages: [
                 { role: "user", content: prompt }
             ],
             temperature: 0.3,
             max_tokens: 250,
         });
-        console.log(`Cohere book description took ${Date.now() - cohereStartedAt}ms`);
+        console.log(`OpenAI book description took ${Date.now() - openaiStartedAt}ms`);
 
-        const description = response.message.content[0].text.trim();
+        const description = response.data.choices[0].message.content.trim();
 
         res.json({ description });
     } catch (error) {
-        console.error("Cohere error:", error);
+        console.error("OpenAI error:", error.response?.data || error);
         res.status(500).json({
             error: "Failed to get book description",
             details: error.message || error,
