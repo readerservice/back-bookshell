@@ -31,7 +31,7 @@ const generateSingleBook = async (req, res) => {
             - Recommend only real, published books by real authors.
             - Do not invent, translate, paraphrase, or alter book titles or author names.
             - If you are not sure that a book exists, do not include it.
-            - Prefer lesser-known / hidden-gem books, but never at the cost of accuracy.
+            - Prefer well-known books with reliable bibliographic information.
             - All books must have different authors.
             - Do not include excluded books.
             - Generate the response in ${responseLanguage}.
