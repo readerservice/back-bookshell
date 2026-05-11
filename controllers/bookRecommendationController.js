@@ -33,6 +33,17 @@ const normalizeForMatch = (value) => {
         .trim();
 };
 
+const isLikelyTitleMatch = (bookTitle, docTitle) => {
+    if (!bookTitle || !docTitle) return false;
+    if (bookTitle === docTitle) return true;
+    if (docTitle.includes(bookTitle) || bookTitle.includes(docTitle)) return true;
+
+    const shorterLength = Math.min(bookTitle.length, docTitle.length);
+    const longerLength = Math.max(bookTitle.length, docTitle.length);
+
+    return shorterLength >= 8 && shorterLength / longerLength >= 0.75;
+};
+
 const getAuthorLastName = (author) => {
     return normalizeForMatch(String(author || "").split(/\s+/).filter(Boolean).pop());
 };
@@ -43,22 +54,19 @@ const isOpenLibraryMatch = (book, doc) => {
     const bookAuthorLastName = getAuthorLastName(book.author);
     const docAuthors = Array.isArray(doc.author_name) ? doc.author_name : [];
 
-    const titleMatches =
-        bookTitle &&
-        docTitle &&
-        (bookTitle === docTitle || docTitle.includes(bookTitle) || bookTitle.includes(docTitle));
+    const titleMatches = isLikelyTitleMatch(bookTitle, docTitle);
 
     const authorMatches =
         bookAuthorLastName &&
         docAuthors.some(author => normalizeForMatch(author).includes(bookAuthorLastName));
 
-    return titleMatches && authorMatches;
+    return titleMatches && (authorMatches || docAuthors.length === 0);
 };
 
 const verifyBookInOpenLibrary = async (book) => {
+    const query = `${book.title} ${book.author}`;
     const params = new URLSearchParams({
-        title: book.title,
-        author: book.author,
+        q: query,
         limit: "5",
         fields: "title,author_name,key,first_publish_year"
     });
