@@ -3,10 +3,26 @@ const env = require("../config/env");
 
 const cohere = new CohereClientV2({ token: env.cohereApiKey })
 
-const modelName = "command-r7b-12-2024";
+const modelName = "command-a-03-2025";
 
 const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
+};
+
+const normalizeText = (value) => {
+    return String(value || "").toLowerCase().trim();
+};
+
+const getBookTitle = (book) => {
+    if (typeof book === "string") return book;
+    return book?.title || "";
+};
+
+const getBookLabel = (book) => {
+    if (typeof book === "string") return book;
+    if (!book?.title) return "";
+
+    return book.author ? `${book.title} by ${book.author}` : book.title;
 };
 
 const generateSingleBook = async (req, res) => {
@@ -21,9 +37,15 @@ const generateSingleBook = async (req, res) => {
 
         const responseLanguage = getResponseLanguage(language);
         const queryParts = [];
-        if (similarBooks.length) queryParts.push(`Similar to: ${similarBooks.join(", ")}`);
+        const similarBooksList = similarBooks.map(getBookLabel).filter(Boolean).join(", ");
+        if (similarBooksList) queryParts.push(`Similar to: ${similarBooksList}`);
         if (interests.length) queryParts.push(`Interests: ${interests.join(", ")}`);
         if (mood.length) queryParts.push(`Mood: ${mood.join(", ")}`);
+        const excludedList = [...similarBooks, ...excluded]
+            .map(getBookLabel)
+            .filter(Boolean)
+            .slice(0, 50)
+            .join(", ");
 
         const prompt = `
             You are a niche book scout.
@@ -32,8 +54,10 @@ const generateSingleBook = async (req, res) => {
             - Do not invent, translate, paraphrase, or alter book titles or author names.
             - If you are not sure that a book exists, do not include it.
             - Prefer well-known books with reliable bibliographic information.
+            - Prefer modern books published from 2000 onward.
             - All books must have different authors.
             - Do not include excluded books.
+            - Avoid all excluded titles exactly, even if they strongly match the criteria.
             - Generate the response in ${responseLanguage}.
             - Keep JSON keys exactly as shown below: "books", "title", "author", "rating".
             - Output ONLY valid JSON:
@@ -44,8 +68,8 @@ const generateSingleBook = async (req, res) => {
             }
             Return 8–10 unique books. Return fewer if needed to avoid uncertain or invented books.
             ${queryParts.length ? `Criteria: ${queryParts.join("; ")}` : "Any genre."}
-            Excluded:
-            ${[...similarBooks, ...excluded].slice(0, 30).join(", ")}
+            Excluded books:
+            ${excludedList || "None"}
             `;
 
         const response = await cohere.chat({
@@ -84,15 +108,28 @@ const generateSingleBook = async (req, res) => {
             return res.status(422).json({ error: "Books array not found in AI response" });
         }
 
-        const seen = new Set();
+        const excludedTitles = new Set(
+            [...similarBooks, ...excluded]
+                .map(getBookTitle)
+                .map(normalizeText)
+                .filter(Boolean)
+        );
+
+        const seenBooks = new Set();
+        const seenAuthors = new Set();
         const unique = data.books.filter(b => {
             if (!b?.title || !b?.author) return false;
-            const key =
-                b.title.toLowerCase().trim() + "::" +
-                b.author.toLowerCase().trim();
 
-            if (seen.has(key)) return false;
-            seen.add(key);
+            const title = normalizeText(b.title);
+            const author = normalizeText(b.author);
+            const key = `${title}::${author}`;
+
+            if (excludedTitles.has(title)) return false;
+            if (seenBooks.has(key)) return false;
+            if (seenAuthors.has(author)) return false;
+
+            seenBooks.add(key);
+            seenAuthors.add(author);
             return true;
         });
 
