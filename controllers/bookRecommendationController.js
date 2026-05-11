@@ -26,6 +26,66 @@ const getBookLabel = (book) => {
     return book.author ? `${book.title} by ${book.author}` : book.title;
 };
 
+const normalizeForMatch = (value) => {
+    return String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9а-яё]/gi, "")
+        .trim();
+};
+
+const getAuthorLastName = (author) => {
+    return normalizeForMatch(String(author || "").split(/\s+/).filter(Boolean).pop());
+};
+
+const isOpenLibraryMatch = (book, doc) => {
+    const bookTitle = normalizeForMatch(book.title);
+    const docTitle = normalizeForMatch(doc.title);
+    const bookAuthorLastName = getAuthorLastName(book.author);
+    const docAuthors = Array.isArray(doc.author_name) ? doc.author_name : [];
+
+    const titleMatches =
+        bookTitle &&
+        docTitle &&
+        (bookTitle === docTitle || docTitle.includes(bookTitle) || bookTitle.includes(docTitle));
+
+    const authorMatches =
+        bookAuthorLastName &&
+        docAuthors.some(author => normalizeForMatch(author).includes(bookAuthorLastName));
+
+    return titleMatches && authorMatches;
+};
+
+const verifyBookInOpenLibrary = async (book) => {
+    const params = new URLSearchParams({
+        title: book.title,
+        author: book.author,
+        limit: "5",
+        fields: "title,author_name,key,first_publish_year"
+    });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+
+    try {
+        const response = await fetch(`https://openlibrary.org/search.json?${params}`, {
+            signal: controller.signal,
+            headers: {
+                "User-Agent": "bookshell-app/1.0"
+            }
+        });
+
+        if (!response.ok) return false;
+
+        const data = await response.json();
+        return Array.isArray(data.docs) && data.docs.some(doc => isOpenLibraryMatch(book, doc));
+    } catch (error) {
+        console.error("Open Library verification failed:", error.message || error);
+        return false;
+    } finally {
+        clearTimeout(timeout);
+    }
+};
+
 const generateSingleBook = async (req, res) => {
     try {
         const {
@@ -67,7 +127,7 @@ const generateSingleBook = async (req, res) => {
                 { "title": "string", "author": "string", "rating": "string" }
             ]
             }
-            Return 4 unique books. Return fewer if needed to avoid uncertain or invented books.
+            Return 5 unique books. Return fewer if needed to avoid uncertain or invented books.
             ${queryParts.length ? `Criteria: ${queryParts.join("; ")}` : "Any genre."}
             Excluded books:
             ${excludedList || "None"}
@@ -82,7 +142,7 @@ const generateSingleBook = async (req, res) => {
                     content: prompt
                 }
             ],
-            temperature: 0.3,
+            temperature: 0.2,
             max_tokens: 350
         });
         console.log(`Cohere book generation took ${Date.now() - cohereStartedAt}ms`);
@@ -140,7 +200,24 @@ const generateSingleBook = async (req, res) => {
             return res.status(422).json({ error: "No unique books generated" });
         }
 
-        const book = unique[Math.floor(Math.random() * unique.length)];
+        const openLibraryStartedAt = Date.now();
+        const verificationResults = await Promise.all(
+            unique.map(async (book) => ({
+                book,
+                exists: await verifyBookInOpenLibrary(book)
+            }))
+        );
+        console.log(`Open Library verification took ${Date.now() - openLibraryStartedAt}ms`);
+
+        const verifiedBooks = verificationResults
+            .filter(result => result.exists)
+            .map(result => result.book);
+
+        if (!verifiedBooks.length) {
+            return res.status(422).json({ error: "No verified books found" });
+        }
+
+        const book = verifiedBooks[Math.floor(Math.random() * verifiedBooks.length)];
 
         res.json({
             book
@@ -165,7 +242,7 @@ const getBookDescription = async (req, res) => {
             messages: [
                 { role: "user", content: prompt }
             ],
-            temperature: 0.7,
+            temperature: 0.3,
             max_tokens: 250,
         });
         console.log(`Cohere book description took ${Date.now() - cohereStartedAt}ms`);
