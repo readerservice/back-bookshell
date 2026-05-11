@@ -53,6 +53,14 @@ const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
 };
 
+const getBookOutputLanguageRule = (language) => {
+    if (language === "ru") {
+        return "Return title and author in Russian when a widely used Russian translation/transliteration exists. If there is no reliable Russian title or author spelling, keep the original.";
+    }
+
+    return "Return title and author in English or in the book's original commonly used English-market spelling.";
+};
+
 const normalizeText = (value) => {
     return String(value || "").toLowerCase().trim();
 };
@@ -80,6 +88,7 @@ const generateSingleBook = async (req, res) => {
         } = req.body;
 
         const responseLanguage = getResponseLanguage(language);
+        const bookOutputLanguageRule = getBookOutputLanguageRule(language);
         const queryParts = [];
         const similarBooksList = similarBooks.map(getBookLabel).filter(Boolean).join(", ");
         if (similarBooksList) queryParts.push(`Similar to: ${similarBooksList}`);
@@ -95,7 +104,8 @@ const generateSingleBook = async (req, res) => {
             You are a niche book scout.
             Rules:
             - Recommend only real, published books by real authors.
-            - Do not invent, translate, paraphrase, or alter book titles or author names.
+            - Do not invent, paraphrase, or alter book titles or author names.
+            - ${bookOutputLanguageRule}
             - If you are not sure that a book exists, do not include it.
             - Prefer well-known books with reliable bibliographic information.
             - Prefer modern books published from 2000 onward.
