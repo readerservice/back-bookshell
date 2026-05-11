@@ -5,7 +5,7 @@ const openai = new OpenAIApi(new Configuration({
     apiKey: env.openaiApiKey
 }));
 
-const modelName = "gpt-4o-mini";
+const modelName = "gpt-5-mini";
 
 const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
