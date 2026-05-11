@@ -1,11 +1,53 @@
-const { Configuration, OpenAIApi } = require("openai");
 const env = require("../config/env");
 
-const openai = new OpenAIApi(new Configuration({
-    apiKey: env.openaiApiKey
-}));
-
 const modelName = "gpt-5-mini";
+
+const getOpenAIText = (data) => {
+    if (typeof data?.output_text === "string") return data.output_text;
+
+    const output = Array.isArray(data?.output) ? data.output : [];
+    for (const item of output) {
+        const content = Array.isArray(item?.content) ? item.content : [];
+        for (const part of content) {
+            if (typeof part?.text === "string") return part.text;
+        }
+    }
+
+    return "";
+};
+
+const createOpenAIResponse = async ({ input, maxOutputTokens, text }) => {
+    if (!env.openaiApiKey) {
+        throw new Error("OPENAI_API_KEY is not configured");
+    }
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${env.openaiApiKey}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            model: modelName,
+            input,
+            max_output_tokens: maxOutputTokens,
+            reasoning: { effort: "minimal" },
+            text
+        })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        const message = data?.error?.message || "OpenAI request failed";
+        const error = new Error(message);
+        error.status = response.status;
+        error.data = data;
+        throw error;
+    }
+
+    return getOpenAIText(data).trim();
+};
 
 const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
@@ -75,21 +117,39 @@ const generateSingleBook = async (req, res) => {
             `;
 
         const openaiStartedAt = Date.now();
-        const response = await openai.createChatCompletion({
-            model: modelName,
-            messages: [
-                {
-                    role: "user",
-                    content: prompt
+        const text = await createOpenAIResponse({
+            input: prompt,
+            maxOutputTokens: 350,
+            text: {
+                verbosity: "low",
+                format: {
+                    type: "json_schema",
+                    name: "book_recommendations",
+                    strict: true,
+                    schema: {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                            books: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    additionalProperties: false,
+                                    properties: {
+                                        title: { type: "string" },
+                                        author: { type: "string" },
+                                        rating: { type: "string" }
+                                    },
+                                    required: ["title", "author", "rating"]
+                                }
+                            }
+                        },
+                        required: ["books"]
+                    }
                 }
-            ],
-            temperature: 0.2,
-            max_tokens: 350,
-            response_format: { type: "json_object" }
+            }
         });
         console.log(`OpenAI book generation took ${Date.now() - openaiStartedAt}ms`);
-
-        const text = response.data.choices[0].message.content.trim();
 
         let data;
         try {
@@ -149,7 +209,7 @@ const generateSingleBook = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("OpenAI Error:", error.response?.data || error);
+        console.error("OpenAI Error:", error.data || error);
         res.status(500).json({ error: "Failed to generate book" });
     }
 };
@@ -162,21 +222,16 @@ const getBookDescription = async (req, res) => {
         const prompt = `Write a short 2–3 sentence description in ${responseLanguage} of the book "${title}" by ${author || "unknown author"}. Return only the plain text description, no JSON or explanations.`;
 
         const openaiStartedAt = Date.now();
-        const response = await openai.createChatCompletion({
-            model: modelName,
-            messages: [
-                { role: "user", content: prompt }
-            ],
-            temperature: 0.3,
-            max_tokens: 250,
+        const description = await createOpenAIResponse({
+            input: prompt,
+            maxOutputTokens: 250,
+            text: { verbosity: "low" }
         });
         console.log(`OpenAI book description took ${Date.now() - openaiStartedAt}ms`);
 
-        const description = response.data.choices[0].message.content.trim();
-
         res.json({ description });
     } catch (error) {
-        console.error("OpenAI error:", error.response?.data || error);
+        console.error("OpenAI error:", error.data || error);
         res.status(500).json({
             error: "Failed to get book description",
             details: error.message || error,
