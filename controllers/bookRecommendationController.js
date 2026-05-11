@@ -3,7 +3,8 @@ const env = require("../config/env");
 
 const cohere = new CohereClientV2({ token: env.cohereApiKey })
 
-const modelName = "command-r7b-12-2024";
+const recommendationModelName = "command-a-03-2025";
+const descriptionModelName = "command-r7b-12-2024";
 
 const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
@@ -66,7 +67,7 @@ const generateSingleBook = async (req, res) => {
                 { "title": "string", "author": "string", "rating": "string" }
             ]
             }
-            Return 6 unique books. Return fewer if needed to avoid uncertain or invented books.
+            Return 4 unique books. Return fewer if needed to avoid uncertain or invented books.
             ${queryParts.length ? `Criteria: ${queryParts.join("; ")}` : "Any genre."}
             Excluded books:
             ${excludedList || "None"}
@@ -74,7 +75,7 @@ const generateSingleBook = async (req, res) => {
 
         const cohereStartedAt = Date.now();
         const response = await cohere.chat({
-            model: modelName,
+            model: recommendationModelName,
             messages: [
                 {
                     role: "user",
@@ -82,7 +83,7 @@ const generateSingleBook = async (req, res) => {
                 }
             ],
             temperature: 0.3,
-            max_tokens: 500
+            max_tokens: 350
         });
         console.log(`Cohere book generation took ${Date.now() - cohereStartedAt}ms`);
 
@@ -160,7 +161,7 @@ const getBookDescription = async (req, res) => {
 
         const cohereStartedAt = Date.now();
         const response = await cohere.chat({
-            model: modelName,
+            model: descriptionModelName,
             messages: [
                 { role: "user", content: prompt }
             ],
