@@ -28,7 +28,10 @@ const generateSingleBook = async (req, res) => {
         const prompt = `
             You are a niche book scout.
             Rules:
-            - Recommend only lesser-known / hidden-gem books (no bestsellers).
+            - Recommend only real, published books by real authors.
+            - Do not invent, translate, paraphrase, or alter book titles or author names.
+            - If you are not sure that a book exists, do not include it.
+            - Prefer lesser-known / hidden-gem books, but never at the cost of accuracy.
             - All books must have different authors.
             - Do not include excluded books.
             - Generate the response in ${responseLanguage}.
@@ -39,7 +42,7 @@ const generateSingleBook = async (req, res) => {
                 { "title": "string", "author": "string", "rating": "string" }
             ]
             }
-            Return 8–12 unique books.
+            Return 8–10 unique books. Return fewer if needed to avoid uncertain or invented books.
             ${queryParts.length ? `Criteria: ${queryParts.join("; ")}` : "Any genre."}
             Excluded:
             ${[...similarBooks, ...excluded].slice(0, 30).join(", ")}
