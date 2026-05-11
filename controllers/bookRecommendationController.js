@@ -3,7 +3,7 @@ const env = require("../config/env");
 
 const cohere = new CohereClientV2({ token: env.cohereApiKey })
 
-const modelName = "command-a-03-2025";
+const modelName = "command-r7b-12-2024";
 
 const getResponseLanguage = (language) => {
     return language === "ru" ? "Russian" : "English";
