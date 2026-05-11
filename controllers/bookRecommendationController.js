@@ -66,12 +66,13 @@ const generateSingleBook = async (req, res) => {
                 { "title": "string", "author": "string", "rating": "string" }
             ]
             }
-            Return 8–10 unique books. Return fewer if needed to avoid uncertain or invented books.
+            Return 6 unique books. Return fewer if needed to avoid uncertain or invented books.
             ${queryParts.length ? `Criteria: ${queryParts.join("; ")}` : "Any genre."}
             Excluded books:
             ${excludedList || "None"}
             `;
 
+        const cohereStartedAt = Date.now();
         const response = await cohere.chat({
             model: modelName,
             messages: [
@@ -81,8 +82,9 @@ const generateSingleBook = async (req, res) => {
                 }
             ],
             temperature: 0.3,
-            max_tokens: 800
+            max_tokens: 500
         });
+        console.log(`Cohere book generation took ${Date.now() - cohereStartedAt}ms`);
 
         const text = response.message.content[0].text.trim();
 
@@ -137,8 +139,7 @@ const generateSingleBook = async (req, res) => {
             return res.status(422).json({ error: "No unique books generated" });
         }
 
-        const K = Math.min(6, unique.length);
-        const book = unique[Math.floor(Math.random() * K)];
+        const book = unique[Math.floor(Math.random() * unique.length)];
 
         res.json({
             book
@@ -157,6 +158,7 @@ const getBookDescription = async (req, res) => {
 
         const prompt = `Write a short 2–3 sentence description in ${responseLanguage} of the book "${title}" by ${author || "unknown author"}. Return only the plain text description, no JSON or explanations.`;
 
+        const cohereStartedAt = Date.now();
         const response = await cohere.chat({
             model: modelName,
             messages: [
@@ -165,6 +167,7 @@ const getBookDescription = async (req, res) => {
             temperature: 0.7,
             max_tokens: 250,
         });
+        console.log(`Cohere book description took ${Date.now() - cohereStartedAt}ms`);
 
         const description = response.message.content[0].text.trim();
 
