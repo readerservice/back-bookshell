@@ -5,15 +5,21 @@ const cohere = new CohereClientV2({ token: env.cohereApiKey })
 
 const modelName = "command-r7b-12-2024";
 
+const getResponseLanguage = (language) => {
+    return language === "ru" ? "Russian" : "English";
+};
+
 const generateSingleBook = async (req, res) => {
     try {
         const {
             interests = [],
             mood = [],
             similarBooks = [],
-            excluded = []
+            excluded = [],
+            language
         } = req.body;
 
+        const responseLanguage = getResponseLanguage(language);
         const queryParts = [];
         if (similarBooks.length) queryParts.push(`Similar to: ${similarBooks.join(", ")}`);
         if (interests.length) queryParts.push(`Interests: ${interests.join(", ")}`);
@@ -25,6 +31,8 @@ const generateSingleBook = async (req, res) => {
             - Recommend only lesser-known / hidden-gem books (no bestsellers).
             - All books must have different authors.
             - Do not include excluded books.
+            - Generate the response in ${responseLanguage}.
+            - Keep JSON keys exactly as shown below: "books", "title", "author", "rating".
             - Output ONLY valid JSON:
             {
             "books": [
@@ -104,9 +112,10 @@ const generateSingleBook = async (req, res) => {
 
 const getBookDescription = async (req, res) => {
     try {
-        const { title, author } = req.body;
+        const { title, author, language } = req.body;
+        const responseLanguage = getResponseLanguage(language);
 
-        const prompt = `Write a short 2–3 sentence description of the book "${title}" by ${author || "unknown author"}. Return only the plain text description, no JSON or explanations.`;
+        const prompt = `Write a short 2–3 sentence description in ${responseLanguage} of the book "${title}" by ${author || "unknown author"}. Return only the plain text description, no JSON or explanations.`;
 
         const response = await cohere.chat({
             model: modelName,
@@ -114,7 +123,7 @@ const getBookDescription = async (req, res) => {
                 { role: "user", content: prompt }
             ],
             temperature: 0.7,
-            max_tokens: 150,
+            max_tokens: 250,
         });
 
         const description = response.message.content[0].text.trim();
