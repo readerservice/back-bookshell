@@ -55,7 +55,7 @@ const getResponseLanguage = (language) => {
 
 const getBookOutputLanguageRule = (language) => {
     if (language === "ru") {
-        return "Return title and author in Russian when a widely used Russian translation/transliteration exists. If there is no reliable Russian title or author spelling, keep the original.";
+        return "Recommend ONLY books with an official Russian translation. Output titles and authors strictly in Russian. If no official translation exists, skip the book.";
     }
 
     return "Return title and author in English or in the book's original commonly used English-market spelling.";
