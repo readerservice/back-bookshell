@@ -16,6 +16,17 @@ const getOpenAIText = (data) => {
     return "";
 };
 
+const getOpenAIHeaders = (headers) => ({
+    requestId: headers.get("x-request-id"),
+    organization: headers.get("openai-organization"),
+    limitRequests: headers.get("x-ratelimit-limit-requests"),
+    limitTokens: headers.get("x-ratelimit-limit-tokens"),
+    remainingRequests: headers.get("x-ratelimit-remaining-requests"),
+    remainingTokens: headers.get("x-ratelimit-remaining-tokens"),
+    resetRequests: headers.get("x-ratelimit-reset-requests"),
+    resetTokens: headers.get("x-ratelimit-reset-tokens")
+});
+
 const createOpenAIResponse = async ({ input, maxOutputTokens, text }) => {
     if (!env.openaiApiKey) {
         throw new Error("OPENAI_API_KEY is not configured");
@@ -37,12 +48,30 @@ const createOpenAIResponse = async ({ input, maxOutputTokens, text }) => {
     });
 
     const data = await response.json();
+    const openAIHeaders = getOpenAIHeaders(response.headers);
+
+    console.log("OpenAI response meta:", {
+        status: response.status,
+        ok: response.ok,
+        model: modelName,
+        headers: openAIHeaders
+    });
 
     if (!response.ok) {
         const message = data?.error?.message || "OpenAI request failed";
+        console.error("OpenAI response error:", {
+            status: response.status,
+            type: data?.error?.type,
+            code: data?.error?.code,
+            message,
+            headers: openAIHeaders,
+            error: data?.error
+        });
+
         const error = new Error(message);
         error.status = response.status;
         error.data = data;
+        error.openAIHeaders = openAIHeaders;
         throw error;
     }
 
