@@ -1,6 +1,7 @@
 const env = require("../config/env");
 
 const modelName = "gpt-5-mini";
+const OPENAI_TIMEOUT_MS = 110 * 1000;
 
 const getOpenAIText = (data) => {
     if (typeof data?.output_text === "string") return data.output_text;
@@ -32,6 +33,9 @@ const createOpenAIResponse = async ({ input, maxOutputTokens, text }) => {
         throw new Error("OPENAI_API_KEY is not configured");
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
     const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -44,8 +48,9 @@ const createOpenAIResponse = async ({ input, maxOutputTokens, text }) => {
             max_output_tokens: maxOutputTokens,
             reasoning: { effort: "minimal" },
             text
-        })
-    });
+        }),
+        signal: controller.signal
+    }).finally(() => clearTimeout(timeout));
 
     const data = await response.json();
     const openAIHeaders = getOpenAIHeaders(response.headers);
